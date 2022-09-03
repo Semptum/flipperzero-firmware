@@ -296,6 +296,9 @@ void nfc_worker_read(NfcWorker* nfc_worker) {
             } else if(nfc_data->type == FuriHalNfcTypeB) {
                 event = NfcWorkerEventReadUidNfcB;
                 break;
+            } else if(nfc_data->type == FuriHalNfcTypeInnov) {
+                event = NfcWorkerEventReadUidInnov;
+                break;
             } else if(nfc_data->type == FuriHalNfcTypeF) {
                 event = NfcWorkerEventReadUidNfcF;
                 break;

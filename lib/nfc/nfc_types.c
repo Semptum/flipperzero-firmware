@@ -9,6 +9,8 @@ const char* nfc_get_dev_type(FuriHalNfcType type) {
         return "NFC-F";
     } else if(type == FuriHalNfcTypeV) {
         return "NFC-V";
+    } else if(type == FuriHalNfcTypeInnov) {
+        return "Innovatron";
     } else {
         return "Unknown";
     }

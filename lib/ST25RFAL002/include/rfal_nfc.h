@@ -56,6 +56,7 @@
 #ifndef RFAL_NFC_H
 #define RFAL_NFC_H
 
+
 /*
 ******************************************************************************
 * INCLUDES
@@ -85,6 +86,7 @@
 #define RFAL_NFC_POLL_TECH_V 0x0008U /*!< NFC-V technology Flag     */
 #define RFAL_NFC_POLL_TECH_AP2P 0x0010U /*!< AP2P technology Flag      */
 #define RFAL_NFC_POLL_TECH_ST25TB 0x0020U /*!< ST25TB technology Flag    */
+#define RFAL_NFC_POLL_TECH_INNOV 0x0040U /*!< Innovatron technology Flag    */
 #define RFAL_NFC_LISTEN_TECH_A 0x1000U /*!< NFC-V technology Flag     */
 #define RFAL_NFC_LISTEN_TECH_B 0x2000U /*!< NFC-V technology Flag     */
 #define RFAL_NFC_LISTEN_TECH_F 0x4000U /*!< NFC-V technology Flag     */
@@ -152,6 +154,7 @@ typedef enum {
     RFAL_NFC_LISTEN_TYPE_NFCV = 3, /*!< NFC-V Listener device type  */
     RFAL_NFC_LISTEN_TYPE_ST25TB = 4, /*!< ST25TB Listener device type */
     RFAL_NFC_LISTEN_TYPE_AP2P = 5, /*!< AP2P Listener device type   */
+    RFAL_NFC_LISTEN_TYPE_INNOV = 6, /*!< NFC-V Listener device type  */
     RFAL_NFC_POLL_TYPE_NFCA = 10, /*!< NFC-A Poller device type    */
     RFAL_NFC_POLL_TYPE_NFCB = 11, /*!< NFC-B Poller device type    */
     RFAL_NFC_POLL_TYPE_NFCF = 12, /*!< NFC-F Poller device type    */
@@ -174,6 +177,7 @@ typedef struct {
         rfalNfcbListenDevice nfcb; /*!< NFC-B Listen Device instance */
         rfalNfcfListenDevice nfcf; /*!< NFC-F Listen Device instance */
         rfalNfcvListenDevice nfcv; /*!< NFC-V Listen Device instance */
+        rfalInnovListenDevice innov; /*!< NFC-V Listen Device instance */
         rfalSt25tbListenDevice st25tb; /*!< ST25TB Listen Device instance*/
     } dev; /*!< Device's instance            */
 

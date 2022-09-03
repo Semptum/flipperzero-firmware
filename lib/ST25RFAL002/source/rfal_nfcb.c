@@ -41,6 +41,9 @@
  */
 #include "rfal_nfcb.h"
 #include "utils.h"
+#include <stdio.h>
+#include <string.h>
+
 
 /*
  ******************************************************************************
@@ -51,6 +54,12 @@
 #ifndef RFAL_FEATURE_NFCB
 #define RFAL_FEATURE_NFCB false /* NFC-B module configuration missing. Disabled by default */
 #endif
+
+#ifndef RFAL_FEATURE_INNOV
+#define RFAL_FEATURE_INNOV false /* Innovatron module configuration missing. Disabled by default */
+#endif
+
+#define TAG "NFC_B"
 
 #if RFAL_FEATURE_NFCB
 
@@ -191,6 +200,25 @@ ReturnCode rfalNfcbPollerInitialize(void) {
     return ERR_NONE;
 }
 
+#if RFAL_FEATURE_NFCB
+/*******************************************************************************/
+ReturnCode rfalInnovPollerInitialize(void) {
+    ReturnCode ret;
+
+    EXIT_ON_ERR(ret, rfalSetMode(RFAL_MODE_POLL_B_PRIME, RFAL_BR_106, RFAL_BR_106));
+    rfalSetErrorHandling(RFAL_ERRORHANDLING_NFC);
+
+    rfalSetGT(RFAL_GT_NFCB);
+    rfalSetFDTListen(RFAL_FDT_LISTEN_NFCB_POLLER);
+    rfalSetFDTPoll(RFAL_FDT_POLL_NFCB_POLLER);
+
+    gRfalNfcb.AFI = RFAL_NFCB_AFI;
+    gRfalNfcb.PARAM = RFAL_NFCB_PARAM;
+
+    return ERR_NONE;
+}
+#endif
+
 /*******************************************************************************/
 ReturnCode rfalNfcbPollerInitializeWithParams(uint8_t AFI, uint8_t PARAM) {
     ReturnCode ret;
@@ -251,6 +279,41 @@ ReturnCode rfalNfcbPollerCheckPresence(
         return rfalNfcbCheckSensbRes(sensbRes, *sensbResLen);
     }
 
+    return ret;
+}
+
+/*******************************************************************************/
+ReturnCode rfalInnovPollerCheckPresence(
+    uint8_t* response,
+    uint8_t* sensbResLen) {
+    uint16_t rxLen;
+    ReturnCode ret;
+    FURI_LOG_I(TAG, "Searching for Innov tag");
+    uint8_t find_command[3] = {0x01, 0x0b, 0x3f};
+    ret = rfalTransceiveBlockingTxRx(
+        (uint8_t*)&find_command,
+        (uint16_t)3,
+        response,
+        9,
+        &rxLen,
+        RFAL_TXRX_FLAGS_DEFAULT,
+        16000);
+
+    *sensbResLen = (uint8_t)rxLen;
+
+    /*  Check if a transmission error was detected */
+    if((ret == ERR_CRC) || (ret == ERR_FRAMING)) {
+        /* Invalidate received frame as an error was detected (CollisionResolution checks if valid) */
+        *sensbResLen = 0;
+        FURI_LOG_T(TAG, "Error");
+        return ERR_NONE;
+    }
+    char res[18] = {'0'};
+    for(uint8_t i = 0; i<9; i++){
+        snprintf(&res[2*i],3, "%02x", response[i]);
+    }
+    
+    FURI_LOG_T(TAG, "Response: %s", res);
     return ret;
 }
 
@@ -338,6 +401,17 @@ ReturnCode rfalNfcbPollerTechnologyDetection(
 }
 
 /*******************************************************************************/
+ReturnCode rfalInnovPollerTechnologyDetection(
+    rfalComplianceMode compMode,
+    uint8_t* sensbRes,
+    uint8_t* sensbResLen) {
+    NO_WARNING(compMode);
+
+    return rfalInnovPollerCheckPresence(
+        sensbRes, sensbResLen);
+}
+
+/*******************************************************************************/
 ReturnCode rfalNfcbPollerCollisionResolution(
     rfalComplianceMode compMode,
     uint8_t devLimit,
@@ -350,6 +424,21 @@ ReturnCode rfalNfcbPollerCollisionResolution(
         RFAL_NFCB_SLOT_NUM_1,
         RFAL_NFCB_SLOT_NUM_16,
         nfcbDevList,
+        devCnt,
+        &colPending);
+}
+
+/*******************************************************************************/
+ReturnCode rfalInnovPollerCollisionResolution(
+    rfalComplianceMode compMode,
+    rfalInnovListenDevice* InnovDevList,
+    uint8_t* devCnt) {
+    bool colPending; /* dummy */
+    return rfalInnovPollerSlottedCollisionResolution(
+        compMode,
+        RFAL_NFCB_SLOT_NUM_1,
+        RFAL_NFCB_SLOT_NUM_16,
+        InnovDevList,
         devCnt,
         &colPending);
 }
@@ -504,6 +593,48 @@ ReturnCode rfalNfcbPollerSlottedCollisionResolution(
 
     return ERR_NONE;
 }
+
+
+
+
+/*******************************************************************************/
+ReturnCode rfalInnovPollerSlottedCollisionResolution(
+    rfalComplianceMode compMode,
+    rfalNfcbSlots initSlots,
+    rfalNfcbSlots endSlots,
+    rfalInnovListenDevice* InnovDevList,
+    uint8_t* devCnt,
+    bool* colPending) {
+    ReturnCode ret;
+
+    /* Check parameters. In ISO | Activity 1.0 mode the initial slots must be 1 as continuation of Technology Detection */
+    if((InnovDevList == NULL) || (devCnt == NULL) || (colPending == NULL) ||
+       (initSlots > RFAL_NFCB_SLOT_NUM_16) || (endSlots > RFAL_NFCB_SLOT_NUM_16) ||
+       ((compMode == RFAL_COMPLIANCE_MODE_ISO) && (initSlots != RFAL_NFCB_SLOT_NUM_1))) {
+        return ERR_PARAM;
+    }
+
+    /* Initialise as no error in case Activity 1.0 where the previous SENSB_RES from technology detection should be used */
+    ret = ERR_NONE;
+    *devCnt = 0;
+    *colPending = false;
+
+    ret = rfalInnovPollerCheckPresence(
+        (uint8_t*)&InnovDevList->sensbRes,
+        &InnovDevList->sensbResLen);
+
+    if(ret == ERR_NONE){
+        *devCnt = 1;
+        *colPending = false;
+    }
+    
+    return ERR_NONE;
+}
+
+
+
+
+
 
 /*******************************************************************************/
 uint32_t rfalNfcbTR2ToFDT(uint8_t tr2Code) {

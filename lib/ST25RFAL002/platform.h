@@ -40,6 +40,8 @@ void rfal_platform_spi_release();
     true /*!< Enable/Disable RFAL support for NFC-A (ISO14443A)                         */
 #define RFAL_FEATURE_NFCB \
     true /*!< Enable/Disable RFAL support for NFC-B (ISO14443B)                         */
+#define RFAL_FEATURE_INNOV \
+    true /*!< Enable/Disable RFAL support for NFC-B (ISO14443B)                         */
 #define RFAL_FEATURE_NFCF \
     true /*!< Enable/Disable RFAL support for NFC-F (FeliCa)                            */
 #define RFAL_FEATURE_NFCV \

@@ -73,7 +73,7 @@ bool furi_hal_nfc_detect(FuriHalNfcDevData* nfc_data, uint32_t timeout) {
     rfalNfcDiscoverParam params;
     params.compMode = RFAL_COMPLIANCE_MODE_EMV;
     params.techs2Find = RFAL_NFC_POLL_TECH_A | RFAL_NFC_POLL_TECH_B | RFAL_NFC_POLL_TECH_F |
-                        RFAL_NFC_POLL_TECH_V | RFAL_NFC_POLL_TECH_AP2P | RFAL_NFC_POLL_TECH_ST25TB;
+                        RFAL_NFC_POLL_TECH_V | RFAL_NFC_POLL_TECH_AP2P | RFAL_NFC_POLL_TECH_ST25TB | RFAL_NFC_POLL_TECH_INNOV;
     params.totalDuration = 1000;
     params.devLimit = 3;
     params.wakeupEnabled = false;
@@ -130,6 +130,8 @@ bool furi_hal_nfc_detect(FuriHalNfcDevData* nfc_data, uint32_t timeout) {
             nfc_data->type = FuriHalNfcTypeF;
         } else if(dev_list[0].type == RFAL_NFC_LISTEN_TYPE_NFCV) {
             nfc_data->type = FuriHalNfcTypeV;
+        } else if(dev_list[0].type == RFAL_NFC_LISTEN_TYPE_INNOV) {
+            nfc_data->type = FuriHalNfcTypeInnov;
         }
         if(dev_list[0].rfInterface == RFAL_NFC_INTERFACE_RF) {
             nfc_data->interface = FuriHalNfcInterfaceRf;

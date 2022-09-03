@@ -52,6 +52,8 @@
 #include "rfal_nfc.h"
 #include "utils.h"
 #include "rfal_analogConfig.h"
+#define TAG "NFC_B"
+
 
 /*
 ******************************************************************************
@@ -411,8 +413,10 @@ void rfalNfcWorker(void) {
 
     /*******************************************************************************/
     case RFAL_NFC_STATE_POLL_ACTIVATION:
-
         err = rfalNfcPollActivation(gNfcDev.selDevIdx);
+        FURI_LOG_T(TAG,"devId:%d", gNfcDev.selDevIdx);
+        FURI_LOG_T(TAG,"Error: %d", err);
+
         if(err != ERR_BUSY) /* Wait until all Activation is complete */
         {
             if(err != ERR_NONE) /* Activation failed selected device  */
@@ -1036,6 +1040,43 @@ static ReturnCode rfalNfcPollTechDetetection(void) {
 #endif /* RFAL_FEATURE_NFCB */
     }
 
+
+    /*******************************************************************************/
+    /* Passive Innovatron B' Technology Detection                                          */
+    /*******************************************************************************/
+    if(((gNfcDev.disc.techs2Find & RFAL_NFC_POLL_TECH_INNOV) != 0U) &&
+       ((gNfcDev.techs2do & RFAL_NFC_POLL_TECH_INNOV) != 0U)) {
+#if RFAL_FEATURE_INNOV
+
+        uint8_t innovRes[9];
+        uint8_t innovResLen;
+
+        if(!gNfcDev.isTechInit) {
+            EXIT_ON_ERR(err, rfalInnovPollerInitialize()); /* Initialize RFAL for Innovatron */
+            EXIT_ON_ERR(
+                err, rfalFieldOnAndStartGT()); /* As field is already On only starts GT timer */
+            gNfcDev.isTechInit = true;
+        }
+
+        if(rfalIsGTExpired()) /* Wait until Guard Time is fulfilled */
+        {
+            err = rfalInnovPollerTechnologyDetection(
+                gNfcDev.disc.compMode, (uint8_t*)&innovRes, &innovResLen); /* Poll for Innovatron B' devices */
+            if(err == ERR_NONE) {
+                gNfcDev.techsFound |= RFAL_NFC_POLL_TECH_INNOV;
+                FURI_LOG_T(TAG, "Found Innovatron tag");
+            }
+
+            gNfcDev.isTechInit = false;
+            gNfcDev.techs2do &= ~RFAL_NFC_POLL_TECH_INNOV;
+        }
+
+        return ERR_BUSY;
+
+#endif /* RFAL_FEATURE_INNOV */
+    }
+
+
     /*******************************************************************************/
     /* Passive NFC-F Technology Detection                                          */
     /*******************************************************************************/
@@ -1260,6 +1301,52 @@ static ReturnCode rfalNfcPollCollResolution(void) {
         return ERR_BUSY;
     }
 #endif /* RFAL_FEATURE_NFCB*/
+
+
+    /*******************************************************************************/
+    /* Innovatron Collision Resolution                                                  */
+    /*******************************************************************************/
+#if RFAL_FEATURE_INNOV
+    if(((gNfcDev.techsFound & RFAL_NFC_POLL_TECH_INNOV) != 0U) &&
+       ((gNfcDev.techs2do & RFAL_NFC_POLL_TECH_INNOV) !=
+        0U)) /* If an Innovatron device was found/detected, perform Collision Resolution */
+    {
+        rfalInnovListenDevice InnovDevList[RFAL_NFC_MAX_DEVICES];
+
+        if(!gNfcDev.isTechInit) {
+            EXIT_ON_ERR(err, rfalInnovPollerInitialize()); /* Initialize RFAL for Innovatron */
+            EXIT_ON_ERR(
+                err,
+                rfalFieldOnAndStartGT()); /* Ensure GT again as other technologies have also been polled */
+            gNfcDev.isTechInit = true;
+        }
+
+        if(!rfalIsGTExpired()) {
+            return ERR_BUSY;
+        }
+
+        devCnt = 1;
+        gNfcDev.isTechInit = false;
+        gNfcDev.techs2do &= ~RFAL_NFC_POLL_TECH_INNOV;
+
+        err = rfalInnovPollerCollisionResolution(
+            gNfcDev.disc.compMode, InnovDevList, &devCnt);
+        if((err == ERR_NONE) && (devCnt != 0U)) {
+            for(i = 0; i < devCnt;
+                i++) /* Copy devices found form local Innov list into global device list */
+            {
+                gNfcDev.devList[gNfcDev.devCnt].type = RFAL_NFC_LISTEN_TYPE_INNOV;
+                gNfcDev.devList[gNfcDev.devCnt].dev.innov = InnovDevList[i];
+                gNfcDev.devCnt++;
+                return ERR_NONE;
+            }
+        }
+    }
+    return ERR_BUSY;
+
+
+#endif /* RFAL_FEATURE_INNOV*/
+
 
     /*******************************************************************************/
     /* NFC-F Collision Resolution                                                  */
@@ -1626,6 +1713,74 @@ static ReturnCode rfalNfcPollActivation(uint8_t devIt) {
         break;
 
 #endif /* RFAL_FEATURE_NFCB */
+
+        /*******************************************************************************/
+        /* Passive Innovatron Activation                                                    */
+        /*******************************************************************************/
+#if RFAL_FEATURE_INNOV
+    case RFAL_NFC_LISTEN_TYPE_INNOV:
+
+        if(!gNfcDev.isTechInit) {
+            rfalInnovPollerInitialize();
+            gNfcDev.isTechInit = true;
+            gNfcDev.isOperOngoing = false;
+            return ERR_BUSY;
+        }
+
+        if(gNfcDev.devList[devIt].dev.innov.isSleep) /* Check if desired device is in Sleep */
+        {
+            rfalNfcbSensbRes sensbRes;
+            uint8_t sensbResLen;
+
+            /* Wake up all cards. SENSB_RES may return collision but the NFCID0 is available to explicitly select NFC-B card via ATTRIB; so error will be ignored here */
+            rfalInnovPollerCheckPresence((uint8_t*)&sensbRes, &sensbResLen);
+        }
+
+        /* Set NFCID */
+        gNfcDev.devList[devIt].nfcid = gNfcDev.devList[devIt].dev.nfcb.sensbRes.nfcid0;
+        gNfcDev.devList[devIt].nfcidLen = 4;
+
+#if RFAL_FEATURE_ISO_DEP && RFAL_FEATURE_ISO_DEP_POLL
+        /* Check if device supports  ISO-DEP (ISO14443-4) */
+        if((gNfcDev.devList[devIt].dev.nfcb.sensbRes.protInfo.FsciProType &
+            RFAL_NFCB_SENSB_RES_PROTO_ISO_MASK) != 0U) {
+            if(!gNfcDev.isOperOngoing) {
+                rfalIsoDepInitialize();
+                /* Perform ISO-DEP (ISO14443-4) activation: ATTRIB    */
+                EXIT_ON_ERR(
+                    err,
+                    rfalIsoDepPollBStartActivation(
+                        (rfalIsoDepFSxI)RFAL_ISODEP_FSDI_DEFAULT,
+                        RFAL_ISODEP_NO_DID,
+                        gNfcDev.disc.maxBR,
+                        0x00,
+                        &gNfcDev.devList[devIt].dev.nfcb,
+                        NULL,
+                        0,
+                        &gNfcDev.devList[devIt].proto.isoDep));
+
+                gNfcDev.isOperOngoing = true;
+                return ERR_BUSY;
+            }
+
+            err = rfalIsoDepPollBGetActivationStatus();
+            if(err != ERR_NONE) {
+                return err;
+            }
+
+            gNfcDev.devList[devIt].rfInterface =
+                RFAL_NFC_INTERFACE_ISODEP; /* NFC-B T4T device activated */
+            break;
+        }
+
+#endif /* RFAL_FEATURE_ISO_DEP_POLL */
+
+        gNfcDev.devList[devIt].rfInterface =
+            RFAL_NFC_INTERFACE_RF; /* NFC-B device activated     */
+        break;
+
+#endif /* RFAL_FEATURE_NFCB */
+
 
         /*******************************************************************************/
         /* Passive NFC-F Activation                                                    */

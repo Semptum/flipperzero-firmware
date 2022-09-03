@@ -62,6 +62,7 @@ typedef enum {
     FuriHalNfcTypeB,
     FuriHalNfcTypeF,
     FuriHalNfcTypeV,
+    FuriHalNfcTypeInnov,
 } FuriHalNfcType;
 
 typedef enum {

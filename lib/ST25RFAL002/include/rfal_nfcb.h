@@ -191,6 +191,14 @@ typedef struct {
     bool isSleep; /*!< Device sleeping flag  */
 } rfalNfcbListenDevice;
 
+/*! Innov listener device (PICC) struct  */
+typedef struct {
+    uint8_t sensbResLen; /*!< SENSB_RES length      */
+    rfalNfcbSensbRes sensbRes; /*!< SENSB_RES             */
+    bool isSleep; /*!< Device sleeping flag  */
+} rfalInnovListenDevice;
+
+
 /*
 ******************************************************************************
 * GLOBAL FUNCTION PROTOTYPES
@@ -211,6 +219,21 @@ typedef struct {
  *****************************************************************************
  */
 ReturnCode rfalNfcbPollerInitialize(void);
+
+/*! 
+ *****************************************************************************
+ * \brief  Initialize Innovatron Poller mode
+ *  
+ * This methods configures RFAL RF layer to perform as an 
+ * Innovatron Poller/RW (French pre-ISO14443B  PCD) including all default 
+ * timings
+ * It sets Innovatron parameters (AFI, PARAM) to default NFCB values
+ *
+ * \return ERR_WRONG_STATE  : RFAL not initialized or mode not set
+ * \return ERR_NONE         : No error
+ *****************************************************************************
+ */
+ReturnCode rfalInnovPollerInitialize(void);
 
 /*! 
  *****************************************************************************
@@ -262,6 +285,36 @@ ReturnCode rfalNfcbPollerCheckPresence(
     rfalNfcbSlots slots,
     rfalNfcbSensbRes* sensbRes,
     uint8_t* sensbResLen);
+
+/*! 
+ *****************************************************************************
+ * \brief  Innovatron Poller Check Presence
+ *  
+ * This method checks if a Innovatron Listen device (PICC) is present on the field
+ * by sending an ALLB_REQ (WUPB) or SENSB_REQ (REQB)
+ *  
+ * \param[in]  cmd         : Indicate if to send an ALL_REQ or a SENS_REQ
+ * \param[in]  slots       : The number of slots to be announced
+ * \param[out] sensbRes    : If received, the SENSB_RES
+ * \param[out] sensbResLen : If received, the SENSB_RES length
+ * 
+ *
+ * \return ERR_WRONG_STATE  : RFAL not initialized or incorrect mode
+ * \return ERR_PARAM        : Invalid parameters
+ * \return ERR_IO           : Generic internal error
+ * \return ERR_TIMEOUT      : Timeout error, no listener device detected
+ * \return ERR_RF_COLLISION : Collision detected one or more device in the field
+ * \return ERR_PAR          : Parity error detected, one or more device in the field
+ * \return ERR_CRC          : CRC error detected, one or more device in the field
+ * \return ERR_FRAMING      : Framing error detected, one or more device in the field
+ * \return ERR_PROTO        : Protocol error detected, invalid SENSB_RES received
+ * \return ERR_NONE         : No error, SENSB_RES received
+ *****************************************************************************
+ */
+ReturnCode rfalInnovPollerCheckPresence(
+    uint8_t* sensbRes,
+    uint8_t* sensbResLen);
+
 
 /*! 
  *****************************************************************************
@@ -327,6 +380,29 @@ ReturnCode rfalNfcbPollerTechnologyDetection(
     rfalNfcbSensbRes* sensbRes,
     uint8_t* sensbResLen);
 
+
+/*! 
+ *****************************************************************************
+ * \brief  Innovatron Technology Detection
+ *  
+ * This method performs Innovatron B' Technology Detection as defined in the spec
+ * given in the compliance mode
+ *  
+ * \param[in]  compMode    : compliance mode to be performed
+ * \param[out] sensbRes    : location to store the SENSB_RES, if received
+ * \param[out] sensbResLen : length of the SENSB_RES, if received
+ *  
+ * \return ERR_WRONG_STATE  : RFAL not initialized or incorrect mode
+ * \return ERR_PARAM        : Invalid parameters
+ * \return ERR_IO           : Generic internal error
+ * \return ERR_NONE         : No error, one or more device in the field
+ *****************************************************************************
+ */
+ReturnCode rfalInnovPollerTechnologyDetection(
+    rfalComplianceMode compMode,
+    uint8_t* sensbRes,
+    uint8_t* sensbResLen);
+
 /*! 
  *****************************************************************************
  * \brief  NFC-B Poller Collision Resolution
@@ -354,6 +430,35 @@ ReturnCode rfalNfcbPollerCollisionResolution(
     rfalComplianceMode compMode,
     uint8_t devLimit,
     rfalNfcbListenDevice* nfcbDevList,
+    uint8_t* devCnt);
+
+
+
+/*! 
+ *****************************************************************************
+ * \brief  Innovatron Poller Collision Resolution
+ *  
+ * Innovatron Collision resolution  Listener device/card (PICC)
+ * 
+ * This function is used to perform collision resolution for detection in case 
+ * of multiple NFC Devices with Technology B' detected. 
+ * Target with valid SENSB_RES will be stored in devInfo and nfcbDevCount incremented.  
+ *
+ * \param[in]  compMode    : compliance mode to be performed
+ * \param[in]  devLimit    : device limit value, and size nfcbDevList
+ * \param[out] nfcbDevList : NFC-B listener device info
+ * \param[out] devCnt      : devices found counter
+ *
+ * \return ERR_WRONG_STATE  : RFAL not initialized or mode not set
+ * \return ERR_PARAM        : Invalid parameters
+ * \return ERR_IO           : Generic internal error
+ * \return ERR_PROTO        : Protocol error detected
+ * \return ERR_NONE         : No error
+ *****************************************************************************
+ */
+ReturnCode rfalInnovPollerCollisionResolution(
+    rfalComplianceMode compMode,
+    rfalInnovListenDevice* InnovDevList,
     uint8_t* devCnt);
 
 /*! 
@@ -397,6 +502,44 @@ ReturnCode rfalNfcbPollerSlottedCollisionResolution(
     rfalNfcbSlots initSlots,
     rfalNfcbSlots endSlots,
     rfalNfcbListenDevice* nfcbDevList,
+    uint8_t* devCnt,
+    bool* colPending);
+
+
+/*! 
+ *****************************************************************************
+ * \brief  Innovatron Poller Collision Resolution Slotted
+ *  
+ * Innovatron Collision resolution  Listener device/card (PICC). 
+ *  * 
+ * This method provides the means to perform a collision resolution loop with specific
+ * initial and end number of slots. This allows to user to start the loop already with 
+ * greater number of slots, and or limit the end number of slots. At the end a flag
+ * indicating whether there were collisions pending is returned.
+ * 
+ * If RFAL_COMPLIANCE_MODE_ISO is used \a initSlots must be set to RFAL_NFCB_SLOT_NUM_1
+ *  
+ *
+ * \param[in]  compMode    : compliance mode to be performed
+ * \param[in]  devLimit    : device limit value, and size nfcbDevList
+ * \param[in]  initSlots   : number of slots to open initially 
+ * \param[in]  endSlots    : number of slots when to stop collision resolution 
+ * \param[out] nfcbDevList : NFC-B listener device info
+ * \param[out] devCnt      : devices found counter
+ * \param[out] colPending  : flag indicating whether collision are still pending
+ *
+ * \return ERR_WRONG_STATE  : RFAL not initialized or mode not set
+ * \return ERR_PARAM        : Invalid parameters
+ * \return ERR_IO           : Generic internal error
+ * \return ERR_PROTO        : Protocol error detected
+ * \return ERR_NONE         : No error
+ *****************************************************************************
+ */
+ReturnCode rfalInnovPollerSlottedCollisionResolution(
+    rfalComplianceMode compMode,
+    rfalNfcbSlots initSlots,
+    rfalNfcbSlots endSlots,
+    rfalInnovListenDevice* InnovDevList,
     uint8_t* devCnt,
     bool* colPending);
 
